@@ -1,0 +1,1 @@
+Movies and tv data coming soon! Data will be synced from Traktv and Tmbdb.

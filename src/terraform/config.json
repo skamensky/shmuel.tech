@@ -1,0 +1,34 @@
+{
+    "backend": {
+      "project_id": "kelev-dev",
+      "tf_bucket_name": "kelev",
+      "tf_region": "me-west1"
+    },
+    "vpc": {
+      "name": "shmuel-tech-vpc",
+      "subnet_name": "shmuel-tech-subnet",
+      "region": "me-west1",
+      "ip_cidr_range": "10.0.0.0/16"
+    },
+    "dns": {
+      "zone_name": "shmuel-tech-zone",
+      "domain_name": "shmuel.tech",
+      "description": "A zone for shmuel.tech"
+    },
+    "cluster": {
+        "name": "shmuel-tech-primary",
+        "location": "me-west1-a",
+        "region": "me-west1",
+        "environment": "production",
+        "machine_type": "e2-micro",
+        "disk_size_gb": 100,
+        "disk_type": "pd-standard",
+        "initial_node_count": 1,
+        "cluster_subnet_cidr": "10.5.0.0/24", 
+        "secondary_subnets_cidr": "10.0.0.0/24",
+        "pod_cidr": "10.1.0.0/16",
+        "service_cidr": "10.2.0.0/16",
+        "master_cidr": "172.16.0.0/28"
+    }
+  }
+  

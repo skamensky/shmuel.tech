@@ -1,0 +1,1 @@
+{"version":3,"file":"main.css","mappings":";;;AAEA;EACE,YAHW;EAIX;AADF,C","sources":["webpack://my-webpack-project/./src/style.scss"],"sourcesContent":["$body-color: black;\n\nbody {\n  color: $body-color;\n  background: indianred;\n}"],"names":[],"sourceRoot":""}

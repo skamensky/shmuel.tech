@@ -10,3 +10,5 @@ postgres_config
 *tfstate*
 web_backend/main
 docker_launcher/main
+tmp*
+dist/*
