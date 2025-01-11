@@ -32,6 +32,7 @@ resource "google_container_cluster" "primary" {
       display_name = "all"
     }
   }
+  
 }
 
 resource "google_container_node_pool" "primary_nodes" {

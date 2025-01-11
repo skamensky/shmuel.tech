@@ -59,6 +59,22 @@ resource "google_compute_firewall" "default_egress" {
   description        = "Default egress rule to allow all outbound traffic"
 }
 
+
+resource "google_compute_firewall" "allow_http_https" {
+  name    = "allow-http-https-ingress"
+  network = google_compute_network.vpc.name
+
+  direction = "INGRESS"
+  allow {
+    protocol = "tcp"
+    ports    = ["80", "443"]
+  }
+
+  source_ranges = ["0.0.0.0/0"]
+  target_tags   = ["gke-cluster"]
+  description   = "Allow HTTP and HTTPS traffic to GKE cluster"
+}
+
 # https://cloud.google.com/iap/docs/using-tcp-forwarding#firewall
 # for IAP TCP forwarding (i.e. sshing in from the console)
 resource "google_compute_firewall" "iap_ssh" {
@@ -74,3 +90,4 @@ resource "google_compute_firewall" "iap_ssh" {
   priority      = 1000
   description   = "Allow IAP SSH access"
 }
+

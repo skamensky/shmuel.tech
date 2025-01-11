@@ -29,6 +29,7 @@
             pkgs.google-cloud-sdk.components.kubectl
           ])
           pkgs.jq
+          pkgs.kubernetes-helm
         ];
         shell = pkgs.bashInteractive;
       };
