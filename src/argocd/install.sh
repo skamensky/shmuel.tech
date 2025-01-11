@@ -15,6 +15,7 @@ fi
 # Apply the ArgoCD manifest
 echo "Applying ArgoCD manifest..."
 kubectl apply -n "$NAMESPACE" -f "$ARGOCD_MANIFEST_URL"
+kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj-labs/applicationset/master/manifests/install.yaml
 
 # Wait for the ArgoCD server deployment to become available
 echo "Waiting for ArgoCD server to become available..."

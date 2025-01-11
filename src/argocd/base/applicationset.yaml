@@ -1,0 +1,28 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: argocd-applications
+  namespace: argocd
+spec:
+  generators:
+    - git:
+        repoURL: https://github.com/skamensky/shmuel.tech.git
+        revision: HEAD
+        directories:
+          - path: src/argocd/*
+  template:
+    metadata:
+      name: '{{path.basename}}'
+    spec:
+      project: default
+      source:
+        repoURL: https://github.com/skamensky/shmuel.tech.git
+        path: '{{path}}'
+        targetRevision: HEAD
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: '{{path.basename}}'
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true

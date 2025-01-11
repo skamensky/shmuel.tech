@@ -59,7 +59,7 @@ resource "google_container_node_pool" "primary_nodes" {
     # only putting here so TF doesn't try to update, bug in the provider
     kubelet_config {
       cpu_manager_policy = "static"
-       # TODO, revisit this to see if we should change to false.
+       # TODO, revisit this to see if we should change to true.
        # it allows the pods to use more than their cpu quota if there is spare capacity
       cpu_cfs_quota = false
       pod_pids_limit = 0

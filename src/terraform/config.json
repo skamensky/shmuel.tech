@@ -20,7 +20,7 @@
         "location": "me-west1-a",
         "region": "me-west1",
         "environment": "production",
-        "machine_type": "e2-micro",
+        "machine_type": "e2-small",
         "disk_size_gb": 100,
         "disk_type": "pd-standard",
         "initial_node_count": 1,
