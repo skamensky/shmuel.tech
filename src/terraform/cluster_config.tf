@@ -199,3 +199,39 @@ resource "kubernetes_manifest" "letsencrypt_prod_issuer" {
   ]
 }
 
+
+## NGINX Ingress Controller ##
+
+resource "kubernetes_namespace" "nginx_ingress" {
+  metadata {
+    name = "ingress-nginx"
+  }
+}
+
+
+resource "helm_release" "nginx_ingress" {
+  name       = "ingress-nginx"
+  namespace  = kubernetes_namespace.nginx_ingress.metadata[0].name
+  chart      = "ingress-nginx"
+  repository = "https://kubernetes.github.io/ingress-nginx"
+  version    = "4.7.1"
+
+  set {
+    name  = "controller.service.type"
+    value = "LoadBalancer"
+  }
+
+  set {
+    name  = "controller.service.externalTrafficPolicy"
+    value = "Local"
+  }
+
+  set {
+    name  = "controller.admissionWebhooks.enabled"
+    value = "true"
+  }
+
+  depends_on = [
+    kubernetes_namespace.nginx_ingress
+  ]
+}
