@@ -145,3 +145,57 @@ resource "helm_release" "external_dns" {
     kubernetes_namespace.external_dns
   ]
 }
+
+## Cert Manager ##
+
+resource "kubernetes_namespace" "cert_manager" {
+  metadata {
+    name = "cert-manager"
+  }
+}
+
+resource "helm_release" "cert_manager" {
+  name       = "cert-manager"
+  namespace  = kubernetes_namespace.cert_manager.metadata[0].name
+  chart      = "cert-manager"
+  repository = "oci://registry-1.docker.io/bitnamicharts"
+  version    = "1.4.0"
+
+  set {
+    name  = "installCRDs"
+    value = "true"
+  }
+}
+
+resource "kubernetes_manifest" "letsencrypt_prod_issuer" {
+  manifest = {
+    apiVersion = "cert-manager.io/v1"
+    kind       = "ClusterIssuer"
+    metadata = {
+      name = "letsencrypt-prod"
+    }
+    spec = {
+      acme = {
+        email                 = local.config.tls.letsencrypt.email
+        server                = "https://acme-v02.api.letsencrypt.org/directory"
+        privateKeySecretRef = {
+          name = "letsencrypt-prod-key"
+        }
+        solvers = [
+          {
+            http01 = {
+              ingress = {
+                class = "nginx"
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+
+  depends_on = [
+    helm_release.cert_manager
+  ]
+}
+

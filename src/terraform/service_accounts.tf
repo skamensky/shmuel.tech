@@ -50,6 +50,6 @@ resource "google_service_account" "external_secrets" {
 
 resource "google_project_iam_member" "external_secrets_secret_accessor" {
   project = local.config.backend.project_id
-  role    = "roles/secretmanager.secretAccessor"
+  role    = "roles/secretmanager.viewer"
   member  = "serviceAccount:${google_service_account.external_secrets.email}"
 }
