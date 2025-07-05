@@ -1,0 +1,33 @@
+version: '3.9'
+services:
+  traefik:
+    image: traefik:v2.11
+    ports:
+    - 80:80
+    - 8080:8080
+    command:
+    - --providers.docker=true
+    - --entrypoints.web.address=:80
+    - --api.insecure=true
+    volumes:
+    - /var/run/docker.sock:/var/run/docker.sock
+  main-site:
+    build: ./services/main-site
+    environment:
+    - SERVICE_NAME=main-site
+    labels:
+    - traefik.enable=true
+    - traefik.http.routers.main-site.rule=Host(`shmuel.localhost`)
+    - traefik.http.services.main-site.loadbalancer.server.port=80
+    depends_on:
+    - traefik
+  media:
+    build: ./services/media
+    environment:
+    - SERVICE_NAME=media
+    labels:
+    - traefik.enable=true
+    - traefik.http.routers.media.rule=Host(`media.localhost`)
+    - traefik.http.services.media.loadbalancer.server.port=80
+    depends_on:
+    - traefik

@@ -1,0 +1,15 @@
+# Global owners
+* @shmueltech
+
+# Service-specific owners
+/services/ @shmueltech
+
+# Infrastructure and deployment
+/fly.toml @shmueltech
+/docker-compose.yml @shmueltech
+/.github/ @shmueltech
+/scripts/ @shmueltech
+
+# Documentation
+/docs/ @shmueltech
+/README.md @shmueltech 

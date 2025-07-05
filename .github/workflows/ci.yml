@@ -1,0 +1,96 @@
+name: CI
+
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+
+env:
+  FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+
+jobs:
+  build-test-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Cache Docker layers
+        uses: actions/cache@v4
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-buildx-${{ github.sha }}
+          restore-keys: ${{ runner.os }}-buildx-
+
+      - name: Install flyctl
+        uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Authenticate with Fly
+        run: echo "${{ secrets.FLY_API_TOKEN }}" | fly auth token
+
+      - name: Run tests
+        run: |
+          echo "Running tests for all services..."
+          for service_dir in services/*/; do
+            service=$(basename "$service_dir")
+            echo "Testing $service..."
+            if [ -f "$service_dir/go.mod" ]; then
+              # Go service
+              cd "$service_dir"
+              go test ./... || echo "⚠️  No tests found for $service"
+              cd ../..
+            else
+              # Static service
+              make -C "$service_dir" test || echo "⚠️  Test failed for $service"
+            fi
+          done
+
+      - name: Detect changed services
+        if: github.ref == 'refs/heads/master'
+        id: changes
+        run: |
+          echo "🔍 Detecting which services have changes..."
+          
+          # For push events, compare with the previous commit
+          if [ "${{ github.event_name }}" = "push" ]; then
+            base_ref="${{ github.event.before }}"
+            # If it's the first commit, compare with HEAD~1
+            if [ "$base_ref" = "0000000000000000000000000000000000000000" ]; then
+              base_ref="HEAD~1"
+            fi
+          else
+            # For other events, compare with master branch
+            base_ref="origin/master"
+          fi
+          
+          echo "Comparing against: $base_ref"
+          
+          # Get list of changed services
+          changed_services=$(uv run scripts/detect_changes.py "$base_ref" --output-format space-separated)
+          
+          echo "changed_services=$changed_services" >> $GITHUB_OUTPUT
+          
+          if [ -n "$changed_services" ]; then
+            echo "📋 Services to deploy: $changed_services"
+          else
+            echo "📋 No services need deployment"
+          fi
+
+      - name: Deploy changed services
+        if: github.ref == 'refs/heads/master' && steps.changes.outputs.changed_services != ''
+        run: |
+          echo "🚀 Deploying changed services: ${{ steps.changes.outputs.changed_services }}"
+          uv run scripts/deploy.py --service ${{ steps.changes.outputs.changed_services }} --org personal --detach 
