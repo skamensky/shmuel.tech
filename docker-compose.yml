@@ -31,3 +31,23 @@ services:
     - traefik.http.services.media.loadbalancer.server.port=80
     depends_on:
     - traefik
+  dns-proxy:
+    build: ./services/dns-proxy
+    environment:
+    - SERVICE_NAME=dns-proxy
+    labels:
+    - traefik.enable=true
+    - traefik.http.routers.dns-proxy.rule=Host(`dns-proxy.localhost`)
+    - traefik.http.services.dns-proxy.loadbalancer.server.port=80
+    depends_on:
+    - traefik
+  test-service:
+    build: ./services/test-service
+    environment:
+    - SERVICE_NAME=test-service
+    labels:
+    - traefik.enable=true
+    - traefik.http.routers.test-service.rule=Host(`test-service.localhost`)
+    - traefik.http.services.test-service.loadbalancer.server.port=80
+    depends_on:
+    - traefik

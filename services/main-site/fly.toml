@@ -3,6 +3,7 @@ primary_region = "ams"
 kill_signal = "SIGINT"
 
 [build]
+  dockerfile = "Dockerfile"
 
 [env]
   SERVICE_NAME = "main-site"
