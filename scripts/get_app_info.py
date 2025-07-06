@@ -286,7 +286,7 @@ def get_app_info(app_name: str) -> AppInfo:
     """Get app information from Fly.io."""
     print(f"📱 Getting app information for: {app_name}")
     
-    result = run_command(['fly', 'status', '--json', '--app', app_name], silent=True)
+    result = run_command(['flyctl', 'status', '--json', '--app', app_name], silent=True)
     
     try:
         data = json.loads(result.stdout)

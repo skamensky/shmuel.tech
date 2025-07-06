@@ -39,7 +39,7 @@ jobs:
         uses: superfly/flyctl-actions/setup-flyctl@master
 
       - name: Authenticate with Fly
-        run: echo "${{ secrets.FLY_API_TOKEN }}" | fly auth token
+        run: echo "${{ secrets.FLY_API_TOKEN }}" | flyctl auth token
 
       - name: Run tests
         run: |

@@ -297,7 +297,7 @@ def wait_for_certificate(app_name: str, domain: str, timeout: int = 300, silent:
     start_time = time.time()
     
     while time.time() - start_time < timeout:
-        result = run_command(['fly', 'certs', 'show', domain, '--app', app_name], check=False, silent=True)
+        result = run_command(['flyctl', 'certs', 'show', domain, '--app', app_name], check=False, silent=True)
         
         if result.returncode == 0:
             # Parse the certificate status

@@ -55,7 +55,7 @@ def run_command(cmd: List[str], check: bool = True, silent: bool = False, input_
 def check_fly_auth() -> bool:
     """Check if user is authenticated with Fly.io."""
     print("🔐 Checking Fly.io authentication...")
-    result = run_command(['fly', 'auth', 'whoami'], check=False, silent=True)
+    result = run_command(['flyctl', 'auth', 'whoami'], check=False, silent=True)
     
     if result.returncode == 0:
         print("✅ Already authenticated with Fly.io")
@@ -69,7 +69,7 @@ def check_fly_auth() -> bool:
         
     # Try to authenticate with token
     print("🔑 Attempting to authenticate using FLY_API_TOKEN...")
-    auth_result = run_command(['fly', 'auth', 'token'], check=False, silent=True, input_data=token)
+    auth_result = run_command(['flyctl', 'auth', 'token'], check=False, silent=True, input_data=token)
     
     if auth_result.returncode != 0:
         print(f"❌ Failed to authenticate with FLY_API_TOKEN: {auth_result.stderr.strip()}")

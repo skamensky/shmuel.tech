@@ -61,7 +61,7 @@ def sync_secrets_to_fly(app_name: str, secrets: Dict[str, str], dry_run: bool = 
     print(f"🔐 Syncing {len(secrets)} secrets to Fly.io app: {app_name}")
     
     # Build the fly secrets set command
-    cmd = ['fly', 'secrets', 'set', '--app', app_name]
+    cmd = ['flyctl', 'secrets', 'set', '--app', app_name]
     
     # Add each secret as key=value
     for key, value in secrets.items():
