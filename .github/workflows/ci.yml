@@ -39,7 +39,7 @@ jobs:
         uses: superfly/flyctl-actions/setup-flyctl@master
 
       - name: Authenticate with Fly
-        run: echo "${{ secrets.FLY_API_TOKEN }}" | fly auth token
+        run: echo "${{ secrets.FLY_API_TOKEN }}" | flyctl auth token
 
       - name: Run tests
         run: |
@@ -79,7 +79,7 @@ jobs:
           echo "Comparing against: $base_ref"
           
           # Get list of changed services
-          changed_services=$(uv run scripts/detect_changes.py "$base_ref" --output-format space-separated)
+          changed_services=$(uv run detect-changes "$base_ref" --output-format space-separated)
           
           echo "changed_services=$changed_services" >> $GITHUB_OUTPUT
           
@@ -91,6 +91,12 @@ jobs:
 
       - name: Deploy changed services
         if: github.ref == 'refs/heads/master' && steps.changes.outputs.changed_services != ''
+        env:
+          DNS_PROXY_AUTH_TOKEN: ${{ secrets.DNS_PROXY_AUTH_TOKEN }}
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+          NAMECHEAP_API_KEY: ${{ secrets.NAMECHEAP_API_KEY }}
+          NAMECHEAP_API_USER: ${{ secrets.NAMECHEAP_API_USER }}
+          NAMECHEAP_CLIENT_IP: ${{ secrets.NAMECHEAP_CLIENT_IP }}
         run: |
           echo "🚀 Deploying changed services: ${{ steps.changes.outputs.changed_services }}"
-          uv run scripts/deploy.py --service ${{ steps.changes.outputs.changed_services }} --org personal --detach 
+          uv run deploy --service ${{ steps.changes.outputs.changed_services }} --org personal --detach 

@@ -11,10 +11,26 @@ requires-python = ">=3.11"
 dependencies = [
     "pyyaml>=6.0",
     "tomli-w>=1.0.0",
+    "requests>=2.31.0",
+    "python-dotenv>=1.0.0",
+    "tabulate>=0.9.0",
 ]
 
 [project.scripts]
-new-service = "scripts.new_service:main"
+deploy = "scripts.deploy:main"
+detect-changes = "scripts.detect_changes:main"
+new-service = "scripts.service_handler:main"
+get-app-info = "scripts.get_app_info:main"
+sync-secrets = "scripts.sync_secrets:main"
+
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["scripts*"]
 
 [tool.uv]
-dev-dependencies = [] 
+package = true
+dev-dependencies = []

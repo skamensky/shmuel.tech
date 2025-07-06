@@ -45,7 +45,7 @@ build: ## build all service images
 
 deploy: ## deploy all services to Fly.io
 	@echo "🚀 Deploying all services to Fly.io..."
-	@uv run scripts/deploy.py
+	@uv run deploy
 
 deploy-service: setup ## deploy specific services: make deploy-service SERVICE="main-site media"
 	@if [ "$(origin SERVICE)" != "command line" ] || [ -z "$(SERVICE)" ]; then \
@@ -55,11 +55,11 @@ deploy-service: setup ## deploy specific services: make deploy-service SERVICE="
 		exit 1; \
 	fi
 	@echo "🚀 Deploying services: $(SERVICE)"
-	@uv run scripts/deploy.py --service $(SERVICE)
+	@uv run deploy --service $(SERVICE)
 
 deploy-detached: setup ## deploy all services to Fly.io in detached mode
 	@echo "🚀 Deploying all services to Fly.io (detached)..."
-	@uv run scripts/deploy.py --detach
+	@uv run deploy --detach
 
 new-service: setup ## create a new service: make new-service NAME=foo [TYPE=go|static]
 	@if [ "$(origin NAME)" != "command line" ] || [ -z "$(NAME)" ]; then \
@@ -71,7 +71,7 @@ new-service: setup ## create a new service: make new-service NAME=foo [TYPE=go|s
 	fi
 	@SERVICE_TYPE=$${TYPE:-go}; \
 	echo "🚀 Creating new $$SERVICE_TYPE service: $(NAME)"; \
-	uv run scripts/service_handler.py create $(NAME) --type $$SERVICE_TYPE
+	uv run new-service create $(NAME) --type $$SERVICE_TYPE
 
 remove-service: setup ## remove an existing service: make remove-service NAME=foo [FORCE=1]
 	@if [ "$(origin NAME)" != "command line" ] || [ -z "$(NAME)" ]; then \
@@ -82,10 +82,10 @@ remove-service: setup ## remove an existing service: make remove-service NAME=fo
 	fi
 	@if [ "$(FORCE)" = "1" ]; then \
 		echo "🗑️  Removing service: $(NAME) (forced)"; \
-		uv run scripts/service_handler.py remove $(NAME) --force; \
+		uv run new-service remove $(NAME) --force; \
 	else \
 		echo "🗑️  Removing service: $(NAME)"; \
-		uv run scripts/service_handler.py remove $(NAME); \
+		uv run new-service remove $(NAME); \
 	fi
 
 list-services: ## list all services and their status
@@ -108,4 +108,44 @@ detect-changes: setup ## detect which services have changes: make detect-changes
 		exit 1; \
 	fi
 	@echo "🔍 Detecting changes against: $(BASE)"
-	@uv run scripts/detect_changes.py $(BASE)
+	@uv run detect-changes $(BASE)
+
+setup-dns-proxy: ## setup DNS proxy with static IP for Namecheap API
+	@echo "🌐 Setting up DNS proxy..."
+	@echo "📱 Creating DNS proxy app..."
+	@fly apps create shmuel-tech-dns-proxy --org personal || echo "App may already exist"
+	@echo "📡 Allocating static IPv4 address..."
+	@fly ips allocate-v4 --shared -a shmuel-tech-dns-proxy
+	@echo "🚀 Deploying DNS proxy..."
+	@cd services/dns-proxy && fly deploy --config fly.toml --app shmuel-tech-dns-proxy --remote-only
+	@echo "📋 Getting static IP address..."
+	@echo ""
+	@echo "🎯 Your DNS proxy static IP address:"
+	@fly ips list -a shmuel-tech-dns-proxy
+	@echo ""
+	@echo "📋 Next steps:"
+	@echo "1. Add the IP address shown above to your Namecheap API whitelist"
+	@echo "2. Set PROXY_AUTH_TOKEN in fly.toml to a secure random value"
+	@echo "3. Update deploy.py to use DNS_PROXY_URL environment variable"
+
+get-dns-proxy-ip: ## get the static IP of the DNS proxy
+	@echo "📡 DNS Proxy Static IP:"
+	@fly ips list -a shmuel-tech-dns-proxy
+
+deploy-dns-proxy: ## deploy only the DNS proxy service
+	@echo "🌐 Deploying DNS proxy..."
+	@cd services/dns-proxy && fly deploy --config fly.toml --app shmuel-tech-dns-proxy --remote-only
+
+sync-secrets: ## sync secrets for all services with .env files
+	@echo "🔐 Syncing secrets for all services..."
+	@for service_dir in services/*/; do \
+		service=$$(basename "$$service_dir"); \
+		echo "Checking $$service for .env file..."; \
+		if [ -f "$$service_dir/.env" ]; then \
+			echo "🔐 Syncing secrets for $$service"; \
+			$(MAKE) -C "$$service_dir" sync-secrets; \
+		else \
+			echo "⚠️  No .env file found for $$service, skipping"; \
+		fi; \
+	done
+	@echo "✅ Secret sync completed for all services"

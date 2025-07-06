@@ -1,4 +1,4 @@
-app = "shmuel-tech-media"
+app = "shmuel-tech-test-service"
 primary_region = "ams"
 kill_signal = "SIGINT"
 
@@ -6,7 +6,7 @@ kill_signal = "SIGINT"
   dockerfile = "Dockerfile"
 
 [env]
-  SERVICE_NAME = "media"
+  SERVICE_NAME = "test-service"
   PORT = "80"
 
 [http_service]

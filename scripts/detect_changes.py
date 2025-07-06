@@ -11,33 +11,37 @@ from pathlib import Path
 from typing import List, Set
 
 
-def run_git_command(cmd: List[str]) -> str:
+def run_git_command(cmd: List[str], verbose: bool = False) -> str:
     """Run a git command and return the output."""
     try:
         result = subprocess.run(['git'] + cmd, check=True, capture_output=True, text=True)
         return result.stdout.strip()
     except subprocess.CalledProcessError as e:
-        print(f"❌ Git command failed: {e}")
-        print(f"Error: {e.stderr.strip()}")
+        print(f"❌ Git command failed: {e}", file=sys.stderr)
+        if e.stderr:
+            print(f"Error: {e.stderr.strip()}", file=sys.stderr)
         sys.exit(1)
 
 
-def get_changed_files(base_ref: str, head_ref: str = "HEAD") -> List[str]:
+def get_changed_files(base_ref: str, head_ref: str = "HEAD", verbose: bool = False) -> List[str]:
     """Get list of changed files between two git references."""
-    print(f"🔍 Detecting changes between {base_ref} and {head_ref}")
+    if verbose:
+        print(f"🔍 Detecting changes between {base_ref} and {head_ref}", file=sys.stderr)
     
     # Get list of changed files
     cmd = ["diff", "--name-only", base_ref, head_ref]
-    output = run_git_command(cmd)
+    output = run_git_command(cmd, verbose)
     
     if not output:
-        print("📋 No changes detected")
+        if verbose:
+            print("📋 No changes detected", file=sys.stderr)
         return []
     
     changed_files = output.split('\n')
-    print(f"📋 Found {len(changed_files)} changed files:")
-    for file in changed_files:
-        print(f"  - {file}")
+    if verbose:
+        print(f"📋 Found {len(changed_files)} changed files:", file=sys.stderr)
+        for file in changed_files:
+            print(f"  - {file}", file=sys.stderr)
     
     return changed_files
 
@@ -72,7 +76,7 @@ def get_all_services(services_dir: Path) -> Set[str]:
 
 
 def detect_changes(base_ref: str, head_ref: str = "HEAD", services_dir_name: str = "services", 
-                  force_all: bool = False, include_root_changes: bool = True) -> List[str]:
+                  force_all: bool = False, include_root_changes: bool = True, verbose: bool = False) -> List[str]:
     """
     Detect which services have changes.
     
@@ -82,6 +86,7 @@ def detect_changes(base_ref: str, head_ref: str = "HEAD", services_dir_name: str
         services_dir_name: Name of services directory
         force_all: If True, return all services regardless of changes
         include_root_changes: If True, deploy all services when root files change
+        verbose: If True, print debug information to stderr
     
     Returns:
         List of service names that should be deployed
@@ -92,19 +97,23 @@ def detect_changes(base_ref: str, head_ref: str = "HEAD", services_dir_name: str
     all_services = get_all_services(services_dir)
     
     if force_all:
-        print("🚀 Force deployment requested - returning all services")
+        if verbose:
+            print("🚀 Force deployment requested - returning all services", file=sys.stderr)
         return sorted(list(all_services))
     
     if not all_services:
-        print("❌ No services found")
+        if verbose:
+            print("❌ No services found", file=sys.stderr)
         return []
     
-    print(f"📂 Available services: {', '.join(sorted(all_services))}")
+    if verbose:
+        print(f"📂 Available services: {', '.join(sorted(all_services))}", file=sys.stderr)
     
-    changed_files = get_changed_files(base_ref, head_ref)
+    changed_files = get_changed_files(base_ref, head_ref, verbose)
     
     if not changed_files:
-        print("📋 No changes detected - no services to deploy")
+        if verbose:
+            print("📋 No changes detected - no services to deploy", file=sys.stderr)
         return []
     
     # Check for root-level changes that affect all services
@@ -121,7 +130,8 @@ def detect_changes(base_ref: str, head_ref: str = "HEAD", services_dir_name: str
         for file_path in changed_files:
             for root_file in root_files:
                 if file_path.startswith(root_file):
-                    print(f"🔧 Root change detected in {file_path} - deploying all services")
+                    if verbose:
+                        print(f"🔧 Root change detected in {file_path} - deploying all services", file=sys.stderr)
                     root_changes = True
                     break
             if root_changes:
@@ -137,10 +147,12 @@ def detect_changes(base_ref: str, head_ref: str = "HEAD", services_dir_name: str
     valid_changed_services = changed_services.intersection(all_services)
     
     if not valid_changed_services:
-        print("📋 No service changes detected - no services to deploy")
+        if verbose:
+            print("📋 No service changes detected - no services to deploy", file=sys.stderr)
         return []
     
-    print(f"🎯 Services with changes: {', '.join(sorted(valid_changed_services))}")
+    if verbose:
+        print(f"🎯 Services with changes: {', '.join(sorted(valid_changed_services))}", file=sys.stderr)
     return sorted(list(valid_changed_services))
 
 
@@ -152,6 +164,7 @@ def main():
     parser.add_argument('--services-dir', default='services', help='Services directory name (default: services)')
     parser.add_argument('--force-all', action='store_true', help='Return all services regardless of changes')
     parser.add_argument('--no-root-changes', action='store_true', help='Don\'t deploy all services on root changes')
+    parser.add_argument('--verbose', '-v', action='store_true', help='Print debug information to stderr')
     parser.add_argument('--output-format', choices=['list', 'space-separated', 'json'], default='space-separated',
                        help='Output format (default: space-separated)')
     
@@ -163,11 +176,13 @@ def main():
             head_ref=args.head_ref,
             services_dir_name=args.services_dir,
             force_all=args.force_all,
-            include_root_changes=not args.no_root_changes
+            include_root_changes=not args.no_root_changes,
+            verbose=args.verbose
         )
         
         if not changed_services:
-            print("📋 No services to deploy")
+            if args.verbose:
+                print("📋 No services to deploy", file=sys.stderr)
             sys.exit(0)
         
         # Output in requested format
@@ -181,7 +196,7 @@ def main():
             print(json.dumps(changed_services))
         
     except Exception as e:
-        print(f"❌ Error detecting changes: {e}")
+        print(f"❌ Error detecting changes: {e}", file=sys.stderr)
         sys.exit(1)
 
 
