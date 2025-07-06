@@ -1,2 +1,3 @@
 - Email service email.shmuel.tech
 - Add description to eachs shmuel-tech.json and add make target to main site to summarize them and their urls
+- Fix detect_changes.py which seems to think everything has changed. Figure out a solution for changed remotes.

@@ -3,7 +3,7 @@ title: "Hello World"
 date: 2025-07-06T21:00:00+03:00
 description: "My first post"
 tags: ["intro", "example"]
-draft: true
+draft: false
 ---
 
 Welcome to my blog!

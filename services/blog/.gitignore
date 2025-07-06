@@ -6,3 +6,4 @@ resources/_gen/
 
 # Hugo server data
 .server_data/
+.hugo_build.lock

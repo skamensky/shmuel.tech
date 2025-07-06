@@ -1,4 +1,4 @@
-baseURL = "https://blog.shmuel.tech"
+baseURL = "/"
 languageCode = "en-us"
 title = "Shmuel's Tech Blog"
 theme = "beautifulhugo"
