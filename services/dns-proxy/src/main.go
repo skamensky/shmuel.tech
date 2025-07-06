@@ -194,12 +194,13 @@ func main() {
 	mux.HandleFunc("/", homeHandler(serviceName))
 	mux.HandleFunc("/health", healthHandler(serviceName))
 	mux.HandleFunc("/api/dns", dnsProxyHandler(proxyAuthToken))
+	mux.HandleFunc("/api/status", statusHandler(serviceName))
 
 	// Wrap the mux with logging middleware
 	httpHandler := loggingMiddleware(mux)
 
 	slog.Info("Service Configuration",
-		slog.String("endpoints", "/health, /api/dns"),
+		slog.String("endpoints", "/health, /api/dns, /api/status"),
 		slog.String("api_environments", "production & sandbox"),
 		slog.String("health_check_url", fmt.Sprintf("http://localhost:%s/health", port)),
 		slog.String("dns_proxy_url", fmt.Sprintf("http://localhost:%s/api/dns", port)),
@@ -310,6 +311,24 @@ func healthHandler(serviceName string) http.HandlerFunc {
 			Timestamp:             time.Now(),
 			Uptime:                uptime.String(),
 			SupportedEnvironments: []string{"production", "sandbox"},
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(response)
+	}
+}
+
+func statusHandler(serviceName string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		response := DNSProxyResponse{
+			Success: true,
+			Data: map[string]interface{}{
+				"service":   serviceName,
+				"message":   fmt.Sprintf("Hello from %s", serviceName),
+				"timestamp": time.Now(),
+				"status":    "running",
+			},
 		}
 
 		w.Header().Set("Content-Type", "application/json")

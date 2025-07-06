@@ -24,16 +24,23 @@ dev: ## run full stack locally
 
 test: ## run all service tests
 	@echo "🧪 Running tests for all services..."
-	@for service_dir in services/*/; do \
+	@failed_services=""; \
+	for service_dir in services/*/; do \
 		service=$$(basename "$$service_dir"); \
 		echo "Testing $$service..."; \
-		if [ -f "$$service_dir/go.mod" ]; then \
-			cd "$$service_dir" && go test ./... || echo "⚠️  No tests found for $$service"; \
-			cd ../..; \
+		if ! $(MAKE) -C "$$service_dir" test; then \
+			echo "❌ Tests failed for $$service"; \
+			failed_services="$$failed_services $$service"; \
 		else \
-			$(MAKE) -C "$$service_dir" test || echo "⚠️  Test failed for $$service"; \
+			echo "✅ Tests passed for $$service"; \
 		fi; \
-	done
+	done; \
+	if [ -n "$$failed_services" ]; then \
+		echo "❌ Tests failed for services:$$failed_services"; \
+		exit 1; \
+	else \
+		echo "✅ All tests passed!"; \
+	fi
 
 build: ## build all service images
 	@echo "🏗️  Building all service images..."

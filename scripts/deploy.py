@@ -153,6 +153,11 @@ def wait_for_certificate_issuance(app_name: str, domain: str, silent: bool = Fal
                 # Certificate is issued
                 return True, None
             
+            # Also check if the certificate is configured and ready
+            if cert_data.get('Configured', False) and cert_data.get('CertificateAuthority', ''):
+                # Certificate is configured and ready
+                return True, None
+            
             # Check ClientStatus for additional information
             client_status = cert_data.get('ClientStatus', '')
             if not silent:
@@ -211,12 +216,22 @@ def deploy_single_service_worker(service: Dict[str, Any], org: str = "personal",
     app_name = f"shmuel-tech-{service_name}"
     
     try:
-        # Use silent mode to avoid race conditions in output
+        # Thread-safe logging with lock
+        with _print_lock:
+            print(f"🚀 [{service_name}] Starting deployment...")
+        
         # Create app if it doesn't exist
         if not app_exists(app_name, silent=True):
+            with _print_lock:
+                print(f"📱 [{service_name}] Creating new Fly.io app: {app_name}")
             success, error_msg = create_app(app_name, org, silent=True)
             if not success:
                 return (service_name, False, f"Failed to create app '{app_name}': {error_msg}", None)
+            with _print_lock:
+                print(f"✅ [{service_name}] App created successfully")
+        else:
+            with _print_lock:
+                print(f"✅ [{service_name}] App '{app_name}' already exists")
         
         # Add SSL certificate if it doesn't exist
         # Skip DNS proxy service - it doesn't need shmuel.tech domain certificates
@@ -240,20 +255,38 @@ def deploy_single_service_worker(service: Dict[str, Any], org: str = "personal",
             
             # Add missing certificates
             if missing_certs:
+                with _print_lock:
+                    print(f"🔒 [{service_name}] Adding SSL certificates for: {missing_certs}")
                 success, error_msg = add_certificate(app_name, missing_certs, silent=True)
                 if not success:
                     return (service_name, False, f"Failed to add certificates for {missing_certs}: {error_msg}", None)
+                with _print_lock:
+                    print(f"✅ [{service_name}] Certificates added successfully")
+            else:
+                with _print_lock:
+                    print(f"✅ [{service_name}] All certificates already exist")
+        else:
+            with _print_lock:
+                print(f"⏭️  [{service_name}] Skipping certificate setup (DNS proxy service)")
         
         # Deploy service
+        with _print_lock:
+            print(f"🚀 [{service_name}] Starting service deployment...")
         success, error_msg = deploy_service(service, app_name, detach, silent=True)
         if success:
+            with _print_lock:
+                print(f"✅ [{service_name}] Service deployed successfully")
             return (service_name, True, f"Successfully deployed to '{app_name}'", None)
         else:
+            with _print_lock:
+                print(f"❌ [{service_name}] Service deployment failed: {error_msg}")
             return (service_name, False, f"Failed to deploy to '{app_name}': {error_msg}", None)
             
     except Exception as e:
         # Capture full traceback
         full_traceback = traceback.format_exc()
+        with _print_lock:
+            print(f"💥 [{service_name}] Exception during deployment: {str(e)}")
         return (service_name, False, f"Exception during deployment: {str(e)}", full_traceback)
 
 

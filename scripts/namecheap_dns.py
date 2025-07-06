@@ -143,6 +143,13 @@ def get_fly_app_cname(app_name: str, silent: bool = False) -> Optional[str]:
     # The CNAME target is typically appname.fly.dev. (note the trailing dot for FQDN)
     return f"{app_name}.fly.dev."
 
+
+def normalize_dns_address(address: str) -> str:
+    """Normalize DNS address for comparison by ensuring trailing dot and lowercase."""
+    if not address.endswith('.'):
+        address = address + '.'
+    return address.lower()
+
 def prepare_dns_changes_for_services(service_configs: List[Dict[str, str]], silent: bool = False) -> Tuple[List[Dict[str, str]], bool]:
     """
     Prepare DNS changes for multiple services in bulk.
@@ -163,6 +170,12 @@ def prepare_dns_changes_for_services(service_configs: List[Dict[str, str]], sile
     except Exception as e:
         raise Exception(f"Failed to fetch current DNS records: {str(e)}")
     
+    # Debug: Print current records
+    if not silent:
+        print(f"🔍 Current DNS records:")
+        for i, record in enumerate(current_records):
+            print(f"  {i}: Name='{record['Name']}', Type='{record['Type']}', Address='{record['Address']}'")
+    
     # Create a copy to work with
     updated_records = current_records.copy()
     
@@ -171,6 +184,9 @@ def prepare_dns_changes_for_services(service_configs: List[Dict[str, str]], sile
     for config in service_configs:
         service_name = config['service_name']
         app_name = config['app_name']
+        
+        if not silent:
+            print(f"🔍 Processing service: {service_name} (app: {app_name})")
         
         # Determine the hostname
         if service_name == "main-site":
@@ -187,15 +203,25 @@ def prepare_dns_changes_for_services(service_configs: List[Dict[str, str]], sile
                 print(f"⚠️  Could not determine CNAME target for app '{app_name}', skipping...")
             continue
         
+        if not silent:
+            print(f"🔍 Looking for hostname='{hostname}', www_hostname='{www_hostname}', target='{cname_target}'")
+        
         # Update or add the main record for this service
         record_updated = False
         for record in updated_records:
             if record['Name'] == hostname and record['Type'] == 'CNAME':
-                if record['Address'] != cname_target:
+                # Normalize both addresses for comparison
+                current_address = normalize_dns_address(record['Address'])
+                target_address = normalize_dns_address(cname_target)
+                
+                if current_address != target_address:
                     if not silent:
                         print(f"🔄 Updating DNS: {hostname} -> {cname_target}")
                     record['Address'] = cname_target
                     changes_made = True
+                else:
+                    if not silent:
+                        print(f"✅ Record for '{hostname}' already correct")
                 record_updated = True
                 break
         
@@ -217,11 +243,18 @@ def prepare_dns_changes_for_services(service_configs: List[Dict[str, str]], sile
         www_record_updated = False
         for record in updated_records:
             if record['Name'] == www_hostname and record['Type'] == 'CNAME':
-                if record['Address'] != cname_target:
+                # Normalize both addresses for comparison
+                current_address = normalize_dns_address(record['Address'])
+                target_address = normalize_dns_address(cname_target)
+                
+                if current_address != target_address:
                     if not silent:
                         print(f"🔄 Updating DNS: {www_hostname} -> {cname_target}")
                     record['Address'] = cname_target
                     changes_made = True
+                else:
+                    if not silent:
+                        print(f"✅ Record for '{www_hostname}' already correct")
                 www_record_updated = True
                 break
         
@@ -248,6 +281,47 @@ def prepare_dns_changes_for_services(service_configs: List[Dict[str, str]], sile
         print(f"✅ Prepared DNS changes for bulk update")
     
     return updated_records, True
+
+def verify_dns_changes_propagated(service_configs: List[Dict[str, str]], timeout: int = 120, silent: bool = False) -> Tuple[bool, Optional[str]]:
+    """
+    Verify that DNS changes have propagated by checking current records.
+    
+    Args:
+        service_configs: List of dicts with 'service_name' and 'app_name' keys
+        timeout: Maximum time to wait for propagation in seconds
+        silent: Whether to suppress output
+    
+    Returns:
+        Tuple of (success, error_message)
+    """
+    if not silent:
+        print(f"⏳ Verifying DNS changes have propagated (timeout: {timeout}s)...")
+    
+    start_time = time.time()
+    
+    while time.time() - start_time < timeout:
+        try:
+            # Check if changes have propagated
+            updated_records, changes_made = prepare_dns_changes_for_services(service_configs, silent=True)
+            
+            if not changes_made:
+                if not silent:
+                    print("✅ DNS changes have propagated successfully")
+                return True, None
+            
+            if not silent:
+                elapsed = int(time.time() - start_time)
+                print(f"⏳ DNS changes still propagating... ({elapsed}s)")
+            
+            time.sleep(10)  # Wait 10 seconds before checking again
+            
+        except Exception as e:
+            if not silent:
+                print(f"⚠️  Error checking DNS propagation: {str(e)}")
+            time.sleep(10)
+    
+    return False, f"DNS changes did not propagate within {timeout} seconds"
+
 
 def bulk_update_dns_for_services(service_configs: List[Dict[str, str]], silent: bool = False) -> Tuple[bool, Optional[str]]:
     """
@@ -278,6 +352,11 @@ def bulk_update_dns_for_services(service_configs: List[Dict[str, str]], silent: 
         
         if not silent:
             print("✅ Bulk DNS update completed successfully")
+        
+        # Wait for DNS changes to propagate
+        success, error_msg = verify_dns_changes_propagated(service_configs, timeout=120, silent=silent)
+        if not success:
+            return False, f"DNS update succeeded but propagation failed: {error_msg}"
         
         return True, None
         
