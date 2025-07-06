@@ -1,0 +1,67 @@
+baseURL = "https://blog.shmuel.tech"
+languageCode = "en-us"
+title = "Shmuel's Tech Blog"
+theme = "beautifulhugo"
+themesDir = "themes"
+
+enableRobotsTXT = true
+# TODO: Git info is currently disabled in Docker builds for consistency
+# Enable by building from repository root context in the future
+enableGitInfo = true
+enableEmoji = true
+enableSearch = true
+
+[taxonomies]
+  tag = "tags"
+  category = "categories"
+
+[outputs]
+  home = ["HTML", "RSS", "JSON"]
+
+[params]
+  enableSearch = true
+  dateFormat = "January 2, 2006"
+  subtitle = "Thoughts on technology, development, and everything in between"
+  mainSections = ["post"]
+  
+  [params.social]
+    github = "skamensky"
+    twitter = "shmuelkamensky"
+    linkedin = "shmuelkamensky"
+    email = "shmuelkamensky@gmail.com"
+
+  [params.author]
+    name = "Shmuel"
+    email = "shmuelkamensky@gmail.com"
+
+[markup]
+  [markup.goldmark]
+    [markup.goldmark.renderer]
+      unsafe = true
+  [markup.highlight]
+    codeFences = true
+    guessSyntax = true
+    lineNos = true
+    style = "github"
+
+[menu]
+  [[menu.main]]
+    identifier = "home"
+    name = "Home"
+    url = "/"
+    weight = 1
+  [[menu.main]]
+    identifier = "about"
+    name = "About"
+    url = "/about/"
+    weight = 2
+  [[menu.main]]
+    identifier = "tags"
+    name = "Tags"
+    url = "/tags/"
+    weight = 3
+  [[menu.main]]
+    identifier = "categories"
+    name = "Categories"
+    url = "/categories/"
+    weight = 4

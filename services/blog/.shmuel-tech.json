@@ -1,0 +1,5 @@
+{
+  "service_name": "blog",
+  "service_type": "static",
+  "dns_enabled": true
+}

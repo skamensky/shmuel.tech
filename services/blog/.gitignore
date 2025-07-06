@@ -1,0 +1,8 @@
+# Hugo generated files
+public/
+public-*/
+resources/_gen/
+.hugo_build.lock
+
+# Hugo server data
+.server_data/
