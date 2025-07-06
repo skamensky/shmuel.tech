@@ -101,4 +101,9 @@ jobs:
           NAMECHEAP_CLIENT_IP: ${{ secrets.NAMECHEAP_CLIENT_IP }}
         run: |
           echo "🚀 Deploying changed services: ${{ steps.changes.outputs.changed_services }}"
-          uv run deploy --service ${{ steps.changes.outputs.changed_services }} --org personal --detach 
+          services="${{ steps.changes.outputs.changed_services }}"
+          deploy_args=""
+          for service in $services; do
+            deploy_args="$deploy_args --service $service"
+          done
+          uv run deploy $deploy_args --org personal --detach 
