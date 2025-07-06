@@ -1,1 +1,2 @@
 - Email service email.shmuel.tech
+- Add description to eachs shmuel-tech.json and add make target to main site to summarize them and their urls
