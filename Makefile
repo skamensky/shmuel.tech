@@ -68,11 +68,11 @@ deploy-detached: setup ## deploy all services to Fly.io in detached mode
 	@echo "🚀 Deploying all services to Fly.io (detached)..."
 	@uv run deploy --detach
 
-new-service: setup ## create a new service: make new-service NAME=foo [TYPE=go|static]
+new-service: setup ## create a new service: make new-service NAME=foo [TYPE=go|remote]
 	@if [ "$(origin NAME)" != "command line" ] || [ -z "$(NAME)" ]; then \
-		echo "❌ Error: NAME is required. Usage: make new-service NAME=my-service [TYPE=go|static]"; \
+		echo "❌ Error: NAME is required. Usage: make new-service NAME=my-service [TYPE=go|remote]"; \
 		echo "   Example: make new-service NAME=test"; \
-		echo "   Example: make new-service NAME=blog TYPE=static"; \
+		echo "   Example: make new-service NAME=blog TYPE=remote"; \
 		echo "   Note: Don't use 'make new-service test' - use 'make new-service NAME=test'"; \
 		exit 1; \
 	fi
@@ -99,12 +99,17 @@ list-services: ## list all services and their status
 	@echo "📋 Available services:"
 	@for service_dir in services/*/; do \
 		service=$$(basename "$$service_dir"); \
-		if [ -f "$$service_dir/go.mod" ]; then \
-			service_type="Go"; \
-		else \
-			service_type="Static"; \
+		if [ ! -f "$$service_dir/.shmuel-tech.json" ]; then \
+			echo "❌ Error: Service '$$service' is missing .shmuel-tech.json config file"; \
+			exit 1; \
 		fi; \
-		echo "  - $$service ($$service_type)"; \
+		service_type=$$(jq -r '.service_type // "go"' "$$service_dir/.shmuel-tech.json"); \
+		case "$$service_type" in \
+			"go") echo "  - $$service (Go)" ;; \
+			"remote") echo "  - $$service (Remote)" ;; \
+			"static") echo "  - $$service (Static)" ;; \
+			*) echo "  - $$service ($$service_type)" ;; \
+		esac; \
 	done
 
 detect-changes: setup ## detect which services have changes: make detect-changes BASE=origin/main

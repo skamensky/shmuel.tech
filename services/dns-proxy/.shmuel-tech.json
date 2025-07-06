@@ -1,0 +1,5 @@
+{
+  "service_name": "dns-proxy",
+  "service_type": "go",
+  "dns_enabled": false
+} 

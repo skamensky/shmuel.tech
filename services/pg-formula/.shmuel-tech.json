@@ -1,0 +1,8 @@
+{
+  "service_name": "pg-formula",
+  "service_type": "remote",
+  "dns_enabled": true,
+  "remote_repo_url": "https://github.com/skamensky/postgres-formula-compiler.git",
+  "dockerfile_location": "./Dockerfile",
+  "git_ref": "master"
+}

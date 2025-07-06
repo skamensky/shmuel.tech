@@ -8,6 +8,7 @@ Includes automatic DNS management via Namecheap API.
 import argparse
 import json
 import os
+import shutil
 import subprocess
 import sys
 import threading
@@ -58,18 +59,38 @@ def run_command(cmd: List[str], check: bool = True, silent: bool = False, input:
 
 
 
+def get_service_config(service_dir: Path) -> Dict[str, Any]:
+    """Get service configuration from .shmuel-tech.json file."""
+    config_file = service_dir / ".shmuel-tech.json"
+    
+    if not config_file.exists():
+        raise FileNotFoundError(f"Service config file not found: {config_file}")
+    
+    try:
+        with open(config_file, 'r') as f:
+            return json.load(f)
+    except (json.JSONDecodeError, IOError) as e:
+        raise ValueError(f"Could not read config file {config_file}: {e}")
+
+
 def get_services(services_dir: Path) -> List[Dict[str, Any]]:
     """Get list of services with their types."""
     services = []
     
     for service_dir in services_dir.iterdir():
         if service_dir.is_dir() and not service_dir.name.startswith('.'):
-            service_info = {
-                'name': service_dir.name,
-                'path': service_dir,
-                'type': 'go' if (service_dir / 'go.mod').exists() else 'static'
-            }
-            services.append(service_info)
+            try:
+                config = get_service_config(service_dir)
+                service_info = {
+                    'name': service_dir.name,
+                    'path': service_dir,
+                    'type': config.get('service_type', 'go'),
+                    'config': config
+                }
+                services.append(service_info)
+            except (FileNotFoundError, ValueError) as e:
+                print(f"❌ Error: Service '{service_dir.name}' is missing or has invalid .shmuel-tech.json config file: {e}")
+                sys.exit(1)
     
     return services
 
@@ -134,6 +155,81 @@ def add_certificate(app_name: str, domains: List[str], silent: bool = False) -> 
     return True, None
 
 
+def clone_remote_repository(service: Dict[str, Any], silent: bool = False) -> Tuple[bool, Optional[str], Optional[Path]]:
+    """Clone remote repository for deployment. Returns (success, error_message, build_path)."""
+    config = service['config']
+    repo_url = config.get('remote_repo_url')
+    git_ref = config.get('git_ref', 'master')
+    
+    if not repo_url or repo_url == "https://github.com/user/repo.git":
+        return False, "remote_repo_url not configured in .shmuel-tech.json", None
+    
+    # Create build directory in the service directory
+    build_dir = service['path'] / 'build_dir'
+    
+    if not silent:
+        print(f"🌀 Preparing remote repository: {repo_url} at ref: {git_ref}")
+    
+    try:
+        # Check if build directory already exists
+        if build_dir.exists():
+            if not silent:
+                print(f"📋 Updating existing repository at ref: {git_ref}")
+            
+            # Change to build directory for git operations
+            original_cwd = os.getcwd()
+            try:
+                os.chdir(build_dir)
+                
+                # Fetch latest changes
+                result = run_command(['git', 'fetch', 'origin'], check=False, silent=silent)
+                if result.returncode != 0:
+                    return False, f"Git fetch failed: {result.stderr}", None
+                
+                # Checkout the specific git reference
+                result = run_command(['git', 'checkout', git_ref], check=False, silent=silent)
+                if result.returncode != 0:
+                    return False, f"Git checkout failed for ref '{git_ref}': {result.stderr}", None
+                
+                # Try to pull if it's a branch (will fail silently for commit hashes/tags)
+                result = run_command(['git', 'pull'], check=False, silent=True)
+                if result.returncode != 0 and not silent:
+                    print(f"📋 Using specific ref (tag/commit): {git_ref}")
+                
+            finally:
+                os.chdir(original_cwd)
+                
+            if not silent:
+                print(f"✅ Repository updated at ref: {git_ref}")
+        else:
+            # Clone fresh repository
+            if not silent:
+                print(f"📋 Cloning {repo_url} at ref: {git_ref}")
+            
+            # Clone the repository
+            result = run_command(['git', 'clone', repo_url, str(build_dir)], check=False, silent=silent)
+            if result.returncode != 0:
+                return False, f"Git clone failed: {result.stderr}", None
+            
+            # Checkout the specific git reference
+            original_cwd = os.getcwd()
+            try:
+                os.chdir(build_dir)
+                result = run_command(['git', 'checkout', git_ref], check=False, silent=silent)
+            finally:
+                os.chdir(original_cwd)
+                
+            if result.returncode != 0:
+                return False, f"Git checkout failed for ref '{git_ref}': {result.stderr}", None
+            
+            if not silent:
+                print(f"✅ Repository cloned at ref: {git_ref}")
+        
+        return True, None, build_dir
+    except Exception as e:
+        return False, f"Exception during git operations: {str(e)}", None
+
+
 def wait_for_certificate_issuance(app_name: str, domain: str, silent: bool = False, timeout: int = 600) -> Tuple[bool, Optional[str]]:
     """Wait for certificate to be issued. Returns (success, error_message)."""
     start_time = time.time()
@@ -180,6 +276,24 @@ def deploy_service(service: Dict[str, Any], app_name: str, detach: bool = False,
     if not silent:
         print(f"🚀 Deploying service '{service['name']}' to app '{app_name}'...")
     
+    service_type = service.get('type', 'go')
+    deploy_path = service['path']
+    dockerfile_location = 'Dockerfile'
+    
+    # Handle remote services
+    if service_type == 'remote':
+        if not silent:
+            print(f"🌀 Preparing remote service '{service['name']}'...")
+        
+        # Clone remote repository
+        success, error_msg, build_path = clone_remote_repository(service, silent=silent)
+        if not success:
+            return False, f"Failed to clone remote repository: {error_msg}"
+        
+        # Use the build directory for deployment
+        deploy_path = build_path
+        dockerfile_location = service['config'].get('dockerfile_location', './Dockerfile')
+    
     fly_toml = service['path'] / 'fly.toml'
     if not fly_toml.exists():
         error_msg = f"fly.toml not found for service '{service['name']}'"
@@ -187,14 +301,18 @@ def deploy_service(service: Dict[str, Any], app_name: str, detach: bool = False,
             print(f"❌ {error_msg}")
         return False, error_msg
     
-    # Change to service directory before deployment
+    # Change to deployment directory before deployment
     original_cwd = os.getcwd()
     try:
-        os.chdir(service['path'])
+        os.chdir(deploy_path)
         
-        cmd = ['flyctl', 'deploy', '--config', 'fly.toml', '--app', app_name, '--remote-only']
+        cmd = ['flyctl', 'deploy', '--config', str(service['path'] / 'fly.toml'), '--app', app_name, '--remote-only']
         if detach:
             cmd.append('--detach')
+        
+        # For remote services, specify dockerfile location if different from default
+        if service_type == 'remote' and dockerfile_location != 'Dockerfile':
+            cmd.extend(['--dockerfile', dockerfile_location])
         
         result = run_command(cmd, check=False, silent=silent)
         if result.returncode == 0:
@@ -233,9 +351,22 @@ def deploy_single_service_worker(service: Dict[str, Any], org: str = "personal",
             with _print_lock:
                 print(f"✅ [{service_name}] App '{app_name}' already exists")
         
-        # Add SSL certificate if it doesn't exist
-        # Skip DNS proxy service - it doesn't need shmuel.tech domain certificates
-        if service_name != "dns-proxy":
+        # Deploy service first (before certificates)
+        with _print_lock:
+            print(f"🚀 [{service_name}] Starting service deployment...")
+        success, error_msg = deploy_service(service, app_name, detach, silent=True)
+        if not success:
+            with _print_lock:
+                print(f"❌ [{service_name}] Service deployment failed: {error_msg}")
+            return (service_name, False, f"Failed to deploy to '{app_name}': {error_msg}", None)
+        
+        with _print_lock:
+            print(f"✅ [{service_name}] Service deployed successfully")
+        
+        # Add SSL certificates after deployment (when app is running)
+        # Some services don't need shmuel.tech domain certificates, like DNS proxy service
+        dns_enabled = service['config'].get('dns_enabled', True)
+        if dns_enabled:
             if service_name == "main-site":
                 domain = "shmuel.tech"
             else:
@@ -266,21 +397,14 @@ def deploy_single_service_worker(service: Dict[str, Any], org: str = "personal",
                 with _print_lock:
                     print(f"✅ [{service_name}] All certificates already exist")
         else:
-            with _print_lock:
-                print(f"⏭️  [{service_name}] Skipping certificate setup (DNS proxy service)")
+            if service_name == "dns-proxy":
+                with _print_lock:
+                    print(f"⏭️  [{service_name}] Skipping certificate setup (DNS proxy service)")
+            else:
+                with _print_lock:
+                    print(f"⏭️  [{service_name}] Skipping certificate setup (DNS disabled in config)")
         
-        # Deploy service
-        with _print_lock:
-            print(f"🚀 [{service_name}] Starting service deployment...")
-        success, error_msg = deploy_service(service, app_name, detach, silent=True)
-        if success:
-            with _print_lock:
-                print(f"✅ [{service_name}] Service deployed successfully")
-            return (service_name, True, f"Successfully deployed to '{app_name}'", None)
-        else:
-            with _print_lock:
-                print(f"❌ [{service_name}] Service deployment failed: {error_msg}")
-            return (service_name, False, f"Failed to deploy to '{app_name}': {error_msg}", None)
+        return (service_name, True, f"Successfully deployed to '{app_name}'", None)
             
     except Exception as e:
         # Capture full traceback
@@ -350,10 +474,12 @@ def deploy_specific_services(service_names: List[str], services_dir: Path, org: 
             print(f"❌ Service '{service_name}' not found in {services_dir}")
             return False
         
+        config = get_service_config(service_path)
         service = {
             'name': service_name,
             'path': service_path,
-            'type': 'go' if (service_path / 'go.mod').exists() else 'static'
+            'type': config.get('service_type', 'go'),
+            'config': config
         }
         services_to_deploy.append(service)
     
@@ -389,6 +515,11 @@ def _deploy_services_parallel(services: List[Dict[str, Any]], org: str = "person
             # Skip DNS proxy service from DNS automation
             if service_name == 'dns-proxy':
                 print(f"⏭️  Skipping DNS for '{service_name}' - doesn't need shmuel.tech domain")
+                continue
+            
+            # Skip services with DNS disabled
+            if not service['config'].get('dns_enabled', True):
+                print(f"⏭️  Skipping DNS for '{service_name}' - DNS disabled in config")
                 continue
                 
             app_name = f"shmuel-tech-{service_name}"

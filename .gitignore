@@ -27,3 +27,6 @@ tmp/
 temp/ 
 *tmp
 tmp.*
+
+# Build directory for remote services
+build_dir/

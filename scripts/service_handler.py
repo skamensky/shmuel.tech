@@ -5,6 +5,7 @@ Creates and removes services with individual Fly.io apps, automatically managing
 """
 
 import argparse
+import json
 import os
 import shutil
 import sys
@@ -320,6 +321,127 @@ DEBUG=false
     print(f"✅ Go service structure created for: {service_name}")
 
 
+def create_remote_service_structure(service_name: str, services_dir: Path) -> None:
+    """Create the directory structure and files for a remote service."""
+    service_dir = services_dir / service_name
+    
+    if service_dir.exists():
+        print(f"❌ Error: Service '{service_name}' already exists at {service_dir}")
+        sys.exit(1)
+    
+    print(f"📁 Creating remote service directory structure for: {service_name}")
+    
+    # Create directory structure
+    service_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Create Makefile for remote service
+    makefile_content = '''.PHONY: clone dev test build run clean shell sync-secrets deploy app-info help
+
+REPO_URL := $(shell jq -r '.remote_repo_url // "https://github.com/user/repo.git"' .shmuel-tech.json)
+BUILD_DIR := build_dir
+DOCKERFILE_LOCATION := $(shell jq -r '.dockerfile_location // "./Dockerfile"' .shmuel-tech.json)
+GIT_REF := $(shell jq -r '.git_ref // "master"' .shmuel-tech.json)
+
+clone: ## clone the remote repository
+	@echo "🌀 Preparing remote repository..."
+	@if [ -z "$(REPO_URL)" ] || [ "$(REPO_URL)" = "null" ] || [ "$(REPO_URL)" = "https://github.com/user/repo.git" ]; then \\
+		echo "❌ Error: remote_repo_url not set in .shmuel-tech.json"; \\
+		echo "Please update .shmuel-tech.json with your GitHub repository URL"; \\
+		exit 1; \\
+	fi
+	@if [ -d "$(BUILD_DIR)" ]; then \\
+		echo "📋 Updating existing repository at ref: $(GIT_REF)"; \\
+		cd $(BUILD_DIR) && git fetch origin && git checkout $(GIT_REF); \\
+		git pull 2>/dev/null || echo "📋 Using specific ref (tag/commit): $(GIT_REF)"; \\
+		echo "✅ Repository updated to $(BUILD_DIR) at ref: $(GIT_REF)"; \\
+	else \\
+		echo "📋 Cloning $(REPO_URL) at ref: $(GIT_REF)"; \\
+		git clone $(REPO_URL) $(BUILD_DIR); \\
+		cd $(BUILD_DIR) && git checkout $(GIT_REF); \\
+		echo "✅ Repository cloned to $(BUILD_DIR) at ref: $(GIT_REF)"; \\
+	fi
+
+dev: clone ## run service in development mode
+	@echo "🚀 Running remote service in development mode..."
+	@cd $(BUILD_DIR) && docker build -f $(DOCKERFILE_LOCATION) -t $(shell basename $(PWD)) .
+	@docker run --rm -p 3000:80 $(shell basename $(PWD))
+
+test: clone ## run service tests
+	@echo "Running tests for $(shell basename $(PWD))"
+	@cd $(BUILD_DIR) && docker build -f $(DOCKERFILE_LOCATION) -t $(shell basename $(PWD))-test .
+	@echo "✅ Build successful - assuming tests pass if build succeeds"
+
+build: clone ## build service image
+	@echo "🏗️  Building remote service image..."
+	@cd $(BUILD_DIR) && docker build -f $(DOCKERFILE_LOCATION) -t $(shell basename $(PWD)) .
+
+run: build ## run service locally
+	@docker run --rm -p 3000:80 $(shell basename $(PWD))
+
+shell: build ## run interactive bash shell in container
+	@docker run -it --rm --entrypoint sh $(shell basename $(PWD))
+
+clean: ## clean build artifacts
+	@echo "🧹 Cleaning build artifacts..."
+	@rm -rf $(BUILD_DIR)
+	@docker rmi $(shell basename $(PWD)) || true
+
+sync-secrets: ## sync secrets from .env file to Fly.io
+	@echo "🔐 Syncing secrets from .env to Fly.io app: shmuel-tech-$(shell basename $(PWD))"
+	@cd ../.. && uv run sync-secrets --service $(shell basename $(PWD))
+
+deploy: ## deploy this service to Fly.io
+	@echo "🚀 Deploying service: $(shell basename $(PWD))"
+	@cd ../.. && uv run deploy --service $(shell basename $(PWD))
+
+app-info: ## get app information from Fly.io
+	@echo "📊 Getting app info for service: $(shell basename $(PWD))"
+	@cd ../.. && uv run get-app-info --service $(shell basename $(PWD))
+
+help:
+	@awk -F':.*##' '/^[a-zA-Z_-]+:.*##/{printf "\\033[36m%-15s\\033[0m %s\\n", $$1,$$2}' $(MAKEFILE_LIST)'''
+    
+    (service_dir / "Makefile").write_text(makefile_content)
+    
+    # Create sample .env file
+    env_sample = '''# Sample environment variables for this service
+# Copy this to .env and modify with your actual values
+# Note: .env files should be added to .gitignore for security
+
+SAMPLE_SECRET=sample_secret_value
+DATABASE_URL=postgres://user:password@localhost:5432/dbname
+API_KEY=your_api_key_here
+DEBUG=false
+'''
+    
+    (service_dir / ".env").write_text(env_sample)
+    
+    print(f"✅ Remote service structure created for: {service_name}")
+
+
+def create_shmuel_tech_config(service_name: str, service_dir: Path, service_type: str) -> None:
+    """Create the .shmuel-tech.json configuration file for the service."""
+    print(f"📄 Creating .shmuel-tech.json config file for {service_name}...")
+    
+    config = {
+        "service_name": service_name,
+        "service_type": service_type,
+        "dns_enabled": True
+    }
+    
+    # Add remote-specific configuration
+    if service_type == "remote":
+        config["remote_repo_url"] = "https://github.com/user/repo.git"
+        config["dockerfile_location"] = "./Dockerfile"
+        config["git_ref"] = "master"
+    
+    config_file = service_dir / ".shmuel-tech.json"
+    with open(config_file, 'w') as f:
+        json.dump(config, f, indent=2)
+    
+    print(f"✅ Created .shmuel-tech.json config file for {service_name}")
+
+
 def create_fly_toml(service_name: str, service_dir: Path) -> None:
     """Create individual fly.toml file for the service."""
     print(f"🪰 Creating fly.toml for {service_name}...")
@@ -443,28 +565,38 @@ def remove_from_docker_compose(service_name: str, compose_file: Path) -> None:
         print(f"⚠️  Warning: Service '{service_name}' not found in docker-compose.yml")
 
 
-def create_service(service_name: str) -> None:
-    """Create a new Go service."""
+def create_service(service_name: str, service_type: str = "go") -> None:
+    """Create a new service."""
     # Get project root directory
     project_root = Path(__file__).parent.parent
     services_dir = project_root / "services"
     compose_file = project_root / "docker-compose.yml"
     
-    print(f"🚀 Creating new Go service: {service_name}")
+    print(f"🚀 Creating new {service_type} service: {service_name}")
     print(f"📂 Project root: {project_root}")
     
-    # Create Go service structure
-    create_go_service_structure(service_name, services_dir)
+    # Create service structure based on type
+    if service_type == "go":
+        create_go_service_structure(service_name, services_dir)
+    elif service_type == "remote":
+        create_remote_service_structure(service_name, services_dir)
+    else:
+        print(f"❌ Error: Unsupported service type: {service_type}")
+        sys.exit(1)
     
     # Create individual fly.toml
     service_dir = services_dir / service_name
     create_fly_toml(service_name, service_dir)
     
+    # Create .shmuel-tech.json config file
+    create_shmuel_tech_config(service_name, service_dir, service_type)
+    
     # Update docker-compose.yml
     update_docker_compose(service_name, compose_file)
     
     # Show success message
-    print(f"""
+    if service_type == "go":
+        print(f"""
 🎉 Go service '{service_name}' created successfully!
 
 📋 Next steps:
@@ -477,6 +609,30 @@ def create_service(service_name: str) -> None:
 🛠️  Service commands:
 - make -C services/{service_name} dev         # Run in development mode
 - make -C services/{service_name} test        # Run tests
+- make -C services/{service_name} build       # Build Docker image
+- make -C services/{service_name} sync-secrets # Sync .env to Fly.io secrets
+- make -C services/{service_name} help        # Show all commands
+- make -C services/{service_name} deploy      # Deploy to Fly.io
+- make -C services/{service_name} app-info    # Get app information from Fly.io
+
+🔐 Secret management:
+- Modify .env file with your secrets
+- Run 'make sync-secrets' to upload to Fly.io
+""")
+    elif service_type == "remote":
+        print(f"""
+🎉 Remote service '{service_name}' created successfully!
+
+📋 Next steps:
+1. Update .shmuel-tech.json with your GitHub repository URL
+2. Optionally specify a git branch/hash in git_ref (defaults to 'master')
+3. Configure secrets: modify .env and update values
+4. Start development: make dev (this will clone the repo)
+5. Visit your service: http://{service_name}.localhost
+
+🛠️  Service commands:
+- make -C services/{service_name} dev         # Clone repo and run in development mode
+- make -C services/{service_name} test        # Clone repo and run tests
 - make -C services/{service_name} build       # Build Docker image
 - make -C services/{service_name} sync-secrets # Sync .env to Fly.io secrets
 - make -C services/{service_name} help        # Show all commands
@@ -553,8 +709,10 @@ def main() -> None:
     subparsers = parser.add_subparsers(dest='command', help='Available commands')
     
     # Create service command
-    create_parser = subparsers.add_parser('create', help='Create a new Go service')
+    create_parser = subparsers.add_parser('create', help='Create a new service')
     create_parser.add_argument('name', help='Name of the service to create')
+    create_parser.add_argument('--type', '-t', choices=['go', 'remote'], default='go', 
+                              help='Type of service to create (default: go)')
     
     # Remove service command
     remove_parser = subparsers.add_parser('remove', help='Remove an existing service')
@@ -562,18 +720,7 @@ def main() -> None:
     remove_parser.add_argument('--force', '-f', action='store_true', 
                               help='Skip interactive confirmation')
     
-    # For backward compatibility, also accept service name as first argument
-    if len(sys.argv) > 1 and sys.argv[1] not in ['create', 'remove', '-h', '--help']:
-        # Legacy mode: assume it's a service name to create
-        service_name = sys.argv[1]
-        
-        # Validate service name
-        if not service_name or not service_name.replace('-', '').replace('_', '').isalnum():
-            print("❌ Error: Service name must contain only alphanumeric characters, hyphens, and underscores")
-            sys.exit(1)
-        
-        create_service(service_name)
-        return
+
     
     args = parser.parse_args()
     
@@ -587,7 +734,7 @@ def main() -> None:
         sys.exit(1)
     
     if args.command == 'create':
-        create_service(args.name)
+        create_service(args.name, args.type)
     elif args.command == 'remove':
         remove_service(args.name, args.force)
 

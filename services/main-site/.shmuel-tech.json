@@ -1,0 +1,5 @@
+{
+  "service_name": "main-site",
+  "service_type": "static",
+  "dns_enabled": true
+} 

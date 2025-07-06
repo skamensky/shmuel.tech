@@ -41,13 +41,13 @@ services:
     - traefik.http.services.dns-proxy.loadbalancer.server.port=80
     depends_on:
     - traefik
-  test-service:
-    build: ./services/test-service
+  pg-formula:
+    build: ./services/pg-formula
     environment:
-    - SERVICE_NAME=test-service
+    - SERVICE_NAME=pg-formula
     labels:
     - traefik.enable=true
-    - traefik.http.routers.test-service.rule=Host(`test-service.localhost`)
-    - traefik.http.services.test-service.loadbalancer.server.port=80
+    - traefik.http.routers.pg-formula.rule=Host(`pg-formula.localhost`)
+    - traefik.http.services.pg-formula.loadbalancer.server.port=80
     depends_on:
     - traefik

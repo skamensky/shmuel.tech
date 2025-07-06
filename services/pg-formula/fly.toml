@@ -1,12 +1,13 @@
-app = "shmuel-tech-test-service"
+app = "shmuel-tech-pg-formula"
 primary_region = "ams"
 kill_signal = "SIGINT"
 
 [build]
-  dockerfile = "Dockerfile"
+  dockerfile = "./build_dir/Dockerfile"
+  ignorefile = "./build_dir/.dockerignore"
 
 [env]
-  SERVICE_NAME = "test-service"
+  SERVICE_NAME = "pg-formula"
   PORT = "80"
 
 [http_service]
