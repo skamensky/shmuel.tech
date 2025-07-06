@@ -288,7 +288,7 @@ def get_app_info(app_name: str) -> AppInfo:
     
     result = run_command(['flyctl', 'status', '--json', '--app', app_name], silent=True)
     
-    try:
+    try:    
         data = json.loads(result.stdout)
         return parse_app_info(data)
     except json.JSONDecodeError as e:

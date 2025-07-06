@@ -81,7 +81,7 @@ def app_exists(app_name: str, silent: bool = False) -> bool:
     """Check if a Fly.io app exists."""
     if not silent:
         print(f"📱 Checking if app '{app_name}' exists...")
-    result = run_command(['fly', 'apps', 'list'], check=False, silent=silent)
+    result = run_command(['flyctl', 'apps', 'list'], check=False, silent=silent)
     if result.returncode == 0:
         return app_name in result.stdout
     return False
@@ -91,7 +91,7 @@ def cert_exists(app_name: str, domain: str, silent: bool = False) -> bool:
     """Check if SSL certificate exists for domain."""
     if not silent:
         print(f"🔒 Checking SSL certificate for '{domain}' in app '{app_name}'...")
-    result = run_command(['fly', 'certs', 'list', '--app', app_name], check=False, silent=silent)
+    result = run_command(['flyctl', 'certs', 'list', '--app', app_name], check=False, silent=silent)
     if result.returncode == 0:
         return domain in result.stdout
     return False
@@ -101,7 +101,7 @@ def create_app(app_name: str, org: str = "personal", silent: bool = False) -> Tu
     """Create a new Fly.io app. Returns (success, error_message)."""
     if not silent:
         print(f"📱 Creating new Fly.io app: {app_name}")
-    result = run_command(['fly', 'apps', 'create', app_name, '--org', org], check=False, silent=silent)
+    result = run_command(['flyctl', 'apps', 'create', app_name, '--org', org], check=False, silent=silent)
     if result.returncode == 0:
         return True, None
     else:
@@ -116,7 +116,7 @@ def add_certificate(app_name: str, domains: List[str], silent: bool = False) -> 
     # Add and wait for each certificate
     for domain in domains:
         # Add certificate
-        result = run_command(['fly', 'certs', 'add', domain, '--app', app_name], check=False, silent=silent)
+        result = run_command(['flyctl', 'certs', 'add', domain, '--app', app_name], check=False, silent=silent)
         if result.returncode != 0:
             return False, f"Exit code {result.returncode}: {result.stderr.strip() if result.stderr else 'Unknown error'}"
         
@@ -140,7 +140,7 @@ def wait_for_certificate_issuance(app_name: str, domain: str, silent: bool = Fal
     
     while time.time() - start_time < timeout:
         # Check certificate status
-        result = run_command(['fly', 'certs', 'show', domain, '--app', app_name, '--json'], check=False, silent=True)
+        result = run_command(['flyctl', 'certs', 'show', domain, '--app', app_name, '--json'], check=False, silent=True)
         
         if result.returncode != 0:
             return False, f"Certificate check failed: {result.stderr}"
@@ -187,7 +187,7 @@ def deploy_service(service: Dict[str, Any], app_name: str, detach: bool = False,
     try:
         os.chdir(service['path'])
         
-        cmd = ['fly', 'deploy', '--config', 'fly.toml', '--app', app_name, '--remote-only']
+        cmd = ['flyctl', 'deploy', '--config', 'fly.toml', '--app', app_name, '--remote-only']
         if detach:
             cmd.append('--detach')
         
@@ -219,28 +219,30 @@ def deploy_single_service_worker(service: Dict[str, Any], org: str = "personal",
                 return (service_name, False, f"Failed to create app '{app_name}': {error_msg}", None)
         
         # Add SSL certificate if it doesn't exist
-        if service_name == "main-site":
-            domain = "shmuel.tech"
-        else:
-            domain = f"{service_name}.shmuel.tech"
-        
-        # Check for both regular and www certificates
-        www_domain = f"www.{domain}"
-        missing_certs = []
-        
-        # Check regular domain first, then www domain
-        # Ordering is intentional: regular certs are processed first, then www certs
-        if not cert_exists(app_name, domain, silent=True):
-            missing_certs.append(domain)
-        
-        if not cert_exists(app_name, www_domain, silent=True):
-            missing_certs.append(www_domain)
-        
-        # Add missing certificates
-        if missing_certs:
-            success, error_msg = add_certificate(app_name, missing_certs, silent=True)
-            if not success:
-                return (service_name, False, f"Failed to add certificates for {missing_certs}: {error_msg}", None)
+        # Skip DNS proxy service - it doesn't need shmuel.tech domain certificates
+        if service_name != "dns-proxy":
+            if service_name == "main-site":
+                domain = "shmuel.tech"
+            else:
+                domain = f"{service_name}.shmuel.tech"
+            
+            # Check for both regular and www certificates
+            www_domain = f"www.{domain}"
+            missing_certs = []
+            
+            # Check regular domain first, then www domain
+            # Ordering is intentional: regular certs are processed first, then www certs
+            if not cert_exists(app_name, domain, silent=True):
+                missing_certs.append(domain)
+            
+            if not cert_exists(app_name, www_domain, silent=True):
+                missing_certs.append(www_domain)
+            
+            # Add missing certificates
+            if missing_certs:
+                success, error_msg = add_certificate(app_name, missing_certs, silent=True)
+                if not success:
+                    return (service_name, False, f"Failed to add certificates for {missing_certs}: {error_msg}", None)
         
         # Deploy service
         success, error_msg = deploy_service(service, app_name, detach, silent=True)
@@ -345,9 +347,17 @@ def _deploy_services_parallel(services: List[Dict[str, Any]], org: str = "person
     if enable_dns:
         
         # Prepare service configurations for DNS
+        # Skip DNS proxy service - it doesn't need to be under our shmuel.tech domain
+        # and we don't want to bother with manual bootstrapping step
         service_configs = []
         for service in services:
             service_name = service['name']
+            
+            # Skip DNS proxy service from DNS automation
+            if service_name == 'dns-proxy':
+                print(f"⏭️  Skipping DNS for '{service_name}' - doesn't need shmuel.tech domain")
+                continue
+                
             app_name = f"shmuel-tech-{service_name}"
             service_configs.append({
                 'service_name': service_name,
