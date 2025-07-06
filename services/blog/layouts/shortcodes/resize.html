@@ -1,5 +1,5 @@
 {{ $original := .Page.Resources.GetMatch (printf "*%s" (.Get 0)) }}
 {{ with $original }}
-  {{ $resized := .Fit "800x" }}
-  <img src="{{ $resized.RelPermalink }}" alt="{{ $.Get 1 }}">
+  {{ $resized := .Resize "800x" }}
+  <img src="{{ $resized.RelPermalink }}" alt="{{ $.Get 1 }}" style="max-width: 100%; height: auto;">
 {{ end }}
