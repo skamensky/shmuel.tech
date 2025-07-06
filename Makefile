@@ -2,7 +2,7 @@
 
 .DEFAULT_GOAL := help
 
-.PHONY: setup dev test build deploy deploy-service deploy-detached new-service remove-service help list-services detect-changes
+.PHONY: setup dev test build deploy deploy-service deploy-detached new-service remove-service help list-services detect-changes new-post build-blog
 
 help:
 	@echo "Available commands:"
@@ -121,6 +121,17 @@ detect-changes: setup ## detect which services have changes: make detect-changes
 	fi
 	@echo "🔍 Detecting changes against: $(BASE)"
 	@uv run detect-changes $(BASE)
+
+new-post: ## create a new blog post: make new-post TITLE="My New Post"
+	@if [ -z "$(TITLE)" ]; then \
+		echo "❌ Error: TITLE is required. Usage: make new-post TITLE=\"My New Post\""; \
+		exit 1; \
+	fi
+	@$(MAKE) -C services/blog new-post TITLE="$(TITLE)"
+
+build-blog: ## build the blog Docker image
+	@echo "🏗️  Building blog Docker image..."
+	@docker build -t blog-builder ./services/blog
 
 setup-dns-proxy: ## setup DNS proxy with static IP for Namecheap API
 	@echo "🌐 Setting up DNS proxy..."

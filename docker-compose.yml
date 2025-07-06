@@ -51,3 +51,13 @@ services:
     - traefik.http.services.pg-formula.loadbalancer.server.port=80
     depends_on:
     - traefik
+  blog:
+    build: ./services/blog
+    environment:
+    - SERVICE_NAME=blog
+    labels:
+    - traefik.enable=true
+    - traefik.http.routers.blog.rule=Host(`blog.localhost`)
+    - traefik.http.services.blog.loadbalancer.server.port=80
+    depends_on:
+    - traefik
