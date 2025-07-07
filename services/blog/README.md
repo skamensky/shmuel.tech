@@ -1,7 +1,7 @@
 # Hugo Blog Service
 
 A static blog built with Hugo and the beautifulhugo theme, designed to be deployed via Docker.
-
+ 
 ## Features
 
 - **Hugo Static Site Generator**: Fast and flexible static site generation
